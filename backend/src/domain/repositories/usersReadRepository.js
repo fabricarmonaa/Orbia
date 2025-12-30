@@ -1,16 +1,16 @@
 import { getPool } from '../../infrastructure/db/mysqlPool.js';
 
 class UsersReadRepository {
-  async upsert({ id, tenant_id, dni, name, last_payment, balance }, connection = null) {
-    const executor = connection || getPool();
+  async upsert({ id, tenant_id, dni, name, last_payment, balance }, { conn } = {}) {
+    const executor = conn || getPool();
     await executor.execute(
       'REPLACE INTO users_read (id, tenant_id, dni, name, last_payment, balance) VALUES (?, ?, ?, ?, ?, ?)',
       [id, tenant_id, dni, name, last_payment, balance]
     );
   }
 
-  async refreshFromSources(tenant_id, user_id, connection = null) {
-    const executor = connection || getPool();
+  async refreshFromSources(tenant_id, user_id, { conn } = {}) {
+    const executor = conn || getPool();
     const [rows] = await executor.execute(
       `SELECT u.id, u.dni, p.first_name, p.last_name
        FROM users u
@@ -34,12 +34,12 @@ class UsersReadRepository {
       name,
       last_payment: lastPayment,
       balance
-    }, executor);
+    }, { conn: executor });
   }
 
-  async list({ tenant_id, filters = {}, page = 1, limit = 20 }) {
+  async list({ tenant_id, filters = {}, page = 1, limit = 20 }, { conn } = {}) {
     const offset = (page - 1) * limit;
-    const pool = getPool();
+    const executor = conn || getPool();
     const conditions = ['ur.tenant_id = ?'];
     const params = [tenant_id];
     if (filters.dni) {
@@ -55,7 +55,7 @@ class UsersReadRepository {
       params.push(filters.active ? 1 : 0);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const [rows] = await pool.execute(
+    const [rows] = await executor.execute(
       `SELECT ur.id, ur.dni, ur.name, ur.last_payment, ur.balance, u.active
        FROM users_read ur
        JOIN users u ON u.id = ur.id

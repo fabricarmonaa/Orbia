@@ -2,8 +2,7 @@ import { Command } from '../../../infrastructure/cqrs/Base.js';
 
 export class CreatePaymentCommand extends Command {
     constructor({ tenant_id, payload }) {
-        super();
+        super(payload);
         this.tenant_id = tenant_id;
-        this.payload = payload;
     }
 }

@@ -2,9 +2,9 @@ import { getPool } from '../../infrastructure/db/mysqlPool.js';
 import { generateId } from '../utils/id.js';
 
 class OrderItemsRepository {
-  async insertMany(order_id, items, connection = null) {
+  async insertMany(order_id, items, { conn } = {}) {
     if (!items.length) return;
-    const executor = connection || getPool();
+    const executor = conn || getPool();
     const values = items.map(item => [
       generateId(),
       order_id,
@@ -18,9 +18,9 @@ class OrderItemsRepository {
     );
   }
 
-  async findByOrder(order_id) {
-    const pool = getPool();
-    const [rows] = await pool.execute('SELECT * FROM order_items WHERE order_id = ?', [order_id]);
+  async findByOrder(order_id, { conn } = {}) {
+    const executor = conn || getPool();
+    const [rows] = await executor.execute('SELECT * FROM order_items WHERE order_id = ?', [order_id]);
     return rows;
   }
 }

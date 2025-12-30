@@ -1,82 +1,77 @@
 import { paymentsRepository } from '../../../domain/repositories/paymentsRepository.js';
-import { cashMovementsRepository } from '../../../domain/repositories/cashMovementsRepository.js';
+import { paymentOrdersRepository } from '../../../domain/repositories/paymentOrdersRepository.js';
+import { paymentMethodsRepository } from '../../../domain/repositories/paymentMethodsRepository.js';
 import { paymentsReadRepository } from '../../../domain/repositories/paymentsReadRepository.js';
-import { cashboxReadRepository } from '../../../domain/repositories/cashboxReadRepository.js';
-import { auditRepository } from '../../../domain/repositories/auditRepository.js';
-import { generateId } from '../../../domain/utils/id.js';
-import { getPool } from '../../../infrastructure/db/mysqlPool.js';
+import { ordersRepository } from '../../../domain/repositories/ordersRepository.js';
+import { usersRepository } from '../../../domain/repositories/usersRepository.js';
+import { usersReadRepository } from '../../../domain/repositories/usersReadRepository.js';
+import { auditEventsRepository } from '../../../domain/repositories/auditEventsRepository.js';
+import { withTransaction } from '../../../infrastructure/db/mysqlPool.js';
+import { Payment } from '../../../domain/entities/Payment.js';
 
 export class RegisterPaymentHandler {
-    async handle(command) {
-        const pool = getPool();
-        const connection = await pool.getConnection();
-
-        try {
-            await connection.beginTransaction();
-
-            const { tenant_id, user_id, amount, method_code, order_ids, note } = command;
-
-            const payment_id = generateId();
-
-            // Create payment
-            await paymentsRepository.create({
-                id: payment_id,
-                tenant_id,
-                user_id,
-                amount,
-                method: method_code,
-                paid_at: new Date(),
-                status: 'COMPLETED',
-                note
-            });
-
-            // Link to orders if provided
-            if (order_ids && order_ids.length > 0) {
-                for (const order_id of order_ids) {
-                    await connection.execute(
-                        'INSERT INTO payment_order_links (payment_id, order_id) VALUES (?, ?)',
-                        [payment_id, order_id]
-                    );
-                }
-            }
-
-            // Create cash movement (INCOME from payment)
-            await cashMovementsRepository.create({
-                id: generateId(),
-                tenant_id,
-                type: 'INCOME',
-                category: 'PAYMENT',
-                method: method_code,
-                amount,
-                user_id,
-                payment_id,
-                note: `Pago de cliente: ${note}`,
-                occurred_at: new Date()
-            });
-
-            // Audit event
-            await auditRepository.log({
-                tenant_id,
-                entity_type: 'PAYMENT',
-                entity_id: payment_id,
-                action: 'REGISTER',
-                performed_by: user_id,
-                details: JSON.stringify({ amount, method: method_code, order_ids })
-            });
-
-            // Refresh read models
-            await paymentsReadRepository.refreshOne(payment_id);
-            await cashboxReadRepository.refresh(tenant_id);
-
-            await connection.commit();
-
-            return { success: true, payment_id };
-
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
-        }
+  async handle(command) {
+    const { tenant_id, payload } = command;
+    if (!tenant_id) {
+      const error = new Error('tenant_id is required');
+      error.statusCode = 400;
+      throw error;
     }
+
+    const { user_id, amount, method_code, order_ids = [], note = '' } = payload || {};
+    const payment = Payment.create({
+      tenantId: tenant_id,
+      userId: user_id,
+      methodCode: method_code,
+      amount,
+      note
+    });
+
+    return withTransaction(async conn => {
+      const user = await usersRepository.findById(payment.userId, tenant_id, { conn });
+      if (!user) {
+        const error = new Error('User not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const method = await paymentMethodsRepository.findByCode(tenant_id, payment.methodCode, { conn });
+      if (!method) {
+        const error = new Error('Payment method not found');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      for (const orderId of order_ids) {
+        const order = await ordersRepository.findById(orderId, tenant_id, { conn });
+        if (!order) {
+          const error = new Error('Order not found for tenant');
+          error.statusCode = 404;
+          throw error;
+        }
+      }
+
+      const created = await paymentsRepository.create({
+        tenant_id,
+        user_id: payment.userId,
+        method_id: method.id,
+        amount: payment.amount,
+        note: payment.note
+      }, { conn });
+
+      await paymentOrdersRepository.link(created.id, order_ids, { conn });
+
+      await auditEventsRepository.append({
+        tenant_id,
+        aggregate_id: created.id,
+        type: 'PAYMENT_REGISTERED',
+        payload: { user_id: payment.userId, amount: payment.amount, method_code: payment.methodCode, order_ids, note: payment.note }
+      }, { conn });
+
+      await paymentsReadRepository.refreshFromSources(tenant_id, created.id, { conn });
+      await usersReadRepository.refreshFromSources(tenant_id, payment.userId, { conn });
+
+      return { payment_id: created.id };
+    });
+  }
 }

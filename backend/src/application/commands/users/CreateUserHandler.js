@@ -13,7 +13,7 @@ export class CreateUserHandler {
         const { tenant_id, payload } = command;
 
         return withTransaction(async connection => {
-            const existing = await usersRepository.findByDniWithinTenant(tenant_id, payload.dni);
+            const existing = await usersRepository.findByDniWithinTenant(tenant_id, payload.dni, { conn: connection });
             if (existing) {
                 const error = new Error('User already exists');
                 error.statusCode = 409;
@@ -24,7 +24,7 @@ export class CreateUserHandler {
 
             const user = await usersRepository.create(
                 { tenant_id, dni: payload.dni, role: payload.role, password_hash, active: 1 },
-                connection
+                { conn: connection }
             );
 
             await userProfilesRepository.create(
@@ -35,7 +35,7 @@ export class CreateUserHandler {
                     email: payload.email,
                     phone: payload.phone
                 },
-                connection
+                { conn: connection }
             );
 
             // Handle extra fields for the tenant
@@ -70,11 +70,11 @@ export class CreateUserHandler {
                         extra_fields: payload.extra_fields || {}
                     }
                 },
-                connection
+                { conn: connection }
             );
 
             // Refresh Read Model
-            await usersReadRepository.refreshFromSources(tenant_id, user.id, connection);
+            await usersReadRepository.refreshFromSources(tenant_id, user.id, { conn: connection });
 
             return { user_id: user.id };
         });

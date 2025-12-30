@@ -1,73 +1,50 @@
 import { usersRepository } from '../../../domain/repositories/usersRepository.js';
 import { userProfilesRepository } from '../../../domain/repositories/userProfilesRepository.js';
-import { userExtraFieldsRepository } from '../../../domain/repositories/userExtraFieldsRepository.js';
 import { usersReadRepository } from '../../../domain/repositories/usersReadRepository.js';
-import { auditRepository } from '../../../domain/repositories/auditRepository.js';
-import { getPool } from '../../../infrastructure/db/mysqlPool.js';
+import { auditEventsRepository } from '../../../domain/repositories/auditEventsRepository.js';
+import { withTransaction } from '../../../infrastructure/db/mysqlPool.js';
 
 export class UpdateUserHandler {
     async handle(command) {
-        const pool = getPool();
-        const connection = await pool.getConnection();
+        const { tenant_id, user_id, payload } = command;
 
-        try {
-            await connection.beginTransaction();
-
-            const { tenant_id, user_id, payload } = command;
-
-            // Verify user exists and belongs to tenant
-            const user = await usersRepository.findById(user_id);
-            if (!user || user.tenant_id !== tenant_id) {
-                throw new Error('User not found or access denied');
+        return withTransaction(async connection => {
+            const user = await usersRepository.findById(user_id, tenant_id, { conn: connection });
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
+                throw error;
             }
 
-            // Update user basic info
-            if (payload.first_name || payload.last_name || payload.email || payload.phone) {
-                const profile = await userProfilesRepository.findByUserId(user_id);
-                if (profile) {
-                    await userProfilesRepository.update({
-                        user_id,
-                        first_name: payload.first_name || profile.first_name,
-                        last_name: payload.last_name || profile.last_name,
-                        email: payload.email || profile.email,
-                        phone: payload.phone || profile.phone
-                    });
-                }
-            }
+            await usersRepository.update({ id: user_id, tenant_id, role: payload.role, active: payload.active ? 1 : 0 }, { conn: connection });
 
-            // Update extra fields if provided
-            if (payload.extra_fields) {
-                for (const [field_name, field_value] of Object.entries(payload.extra_fields)) {
-                    await userExtraFieldsRepository.upsert({
-                        user_id,
-                        field_name,
-                        field_value
-                    });
-                }
-            }
+            await userProfilesRepository.update({
+                user_id,
+                first_name: payload.first_name,
+                last_name: payload.last_name,
+                email: payload.email,
+                phone: payload.phone
+            }, connection);
 
-            // Audit event
-            await auditRepository.log({
+            await auditEventsRepository.append({
                 tenant_id,
-                entity_type: 'USER',
-                entity_id: user_id,
-                action: 'UPDATE',
-                performed_by: user_id, // In real scenario, should be current admin user
-                details: JSON.stringify(payload)
-            });
+                aggregate_id: user_id,
+                type: 'USER_UPDATED',
+                payload: {
+                    role: payload.role,
+                    active: payload.active,
+                    profile: {
+                        first_name: payload.first_name,
+                        last_name: payload.last_name,
+                        email: payload.email,
+                        phone: payload.phone
+                    }
+                }
+            }, { conn: connection });
 
-            // Refresh read model
-            await usersReadRepository.refreshOne(user_id);
+            await usersReadRepository.refreshFromSources(tenant_id, user_id, { conn: connection });
 
-            await connection.commit();
-
-            return { success: true, user_id };
-
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
-        }
+            return { updated: true };
+        });
     }
 }

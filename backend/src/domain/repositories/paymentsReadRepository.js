@@ -1,8 +1,8 @@
 import { getPool } from '../../infrastructure/db/mysqlPool.js';
 
 class PaymentsReadRepository {
-  async refreshFromSources(tenant_id, payment_id, connection = null) {
-    const executor = connection || getPool();
+  async refreshFromSources(tenant_id, payment_id, { conn } = {}) {
+    const executor = conn || getPool();
     const [rows] = await executor.execute(
       `SELECT p.id, p.user_id, pm.name AS method, p.amount, p.paid_at
        FROM payments p
@@ -19,7 +19,7 @@ class PaymentsReadRepository {
     );
   }
 
-  async list({ tenant_id, user_id, page = 1, limit = 20 }) {
+  async list({ tenant_id, user_id, page = 1, limit = 20 }, { conn } = {}) {
     const offset = (page - 1) * limit;
     const conditions = ['tenant_id = ?'];
     const params = [tenant_id];
@@ -28,7 +28,8 @@ class PaymentsReadRepository {
       params.push(user_id);
     }
     const where = `WHERE ${conditions.join(' AND ')}`;
-    const [rows] = await getPool().execute(
+    const executor = conn || getPool();
+    const [rows] = await executor.execute(
       `SELECT id, user_id, amount, method, paid_at FROM payments_read
        ${where}
        ORDER BY paid_at DESC

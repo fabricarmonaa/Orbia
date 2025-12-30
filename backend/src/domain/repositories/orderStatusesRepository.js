@@ -10,8 +10,8 @@ const DEFAULT_STATUSES = [
 ];
 
 class OrderStatusesRepository {
-  async seedDefaults(tenant_id) {
-    const pool = getPool();
+  async seedDefaults(tenant_id, { conn } = {}) {
+    const pool = conn || getPool();
     for (const status of DEFAULT_STATUSES) {
       await pool.execute(
         `INSERT IGNORE INTO order_statuses (id, tenant_id, name, code, sort_order) VALUES (?, ?, ?, ?, ?)`
@@ -20,40 +20,45 @@ class OrderStatusesRepository {
     }
   }
 
-  async findByCode(tenant_id, code) {
-    const [rows] = await getPool().execute(
+  async findByCode(tenant_id, code, { conn } = {}) {
+    const executor = conn || getPool();
+    const [rows] = await executor.execute(
       'SELECT * FROM order_statuses WHERE tenant_id = ? AND code = ? LIMIT 1',
       [tenant_id, code]
     );
     return rows[0] || null;
   }
 
-  async list(tenant_id) {
-    const [rows] = await getPool().execute(
+  async list(tenant_id, { conn } = {}) {
+    const executor = conn || getPool();
+    const [rows] = await executor.execute(
       'SELECT * FROM order_statuses WHERE tenant_id = ? ORDER BY sort_order ASC',
       [tenant_id]
     );
     return rows;
   }
 
-  async create({ tenant_id, name, code, sort_order }) {
+  async create({ tenant_id, name, code, sort_order }, { conn } = {}) {
     const id = generateId();
-    await getPool().execute(
+    const executor = conn || getPool();
+    await executor.execute(
       'INSERT INTO order_statuses (id, tenant_id, name, code, sort_order) VALUES (?, ?, ?, ?, ?)',
       [id, tenant_id, name, code, sort_order]
     );
     return id;
   }
 
-  async update(id, tenant_id, { name, code, sort_order }) {
-    await getPool().execute(
+  async update(id, tenant_id, { name, code, sort_order }, { conn } = {}) {
+    const executor = conn || getPool();
+    await executor.execute(
       'UPDATE order_statuses SET name = ?, code = ?, sort_order = ? WHERE id = ? AND tenant_id = ?',
       [name, code, sort_order, id, tenant_id]
     );
   }
 
-  async delete(id, tenant_id) {
-    await getPool().execute('DELETE FROM order_statuses WHERE id = ? AND tenant_id = ?', [id, tenant_id]);
+  async delete(id, tenant_id, { conn } = {}) {
+    const executor = conn || getPool();
+    await executor.execute('DELETE FROM order_statuses WHERE id = ? AND tenant_id = ?', [id, tenant_id]);
   }
 }
 

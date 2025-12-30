@@ -5,6 +5,7 @@ import { signToken } from '../../infrastructure/security/jwt.js';
 import { verifyPassword } from '../../infrastructure/security/password.js';
 import { tenantService } from '../../application/tenantService.js';
 import { generateId } from '../../domain/utils/id.js';
+import { sendOk } from '../../infrastructure/http/responses.js';
 
 const loginSchema = z.object({
   tenant_id: z.string().optional(),
@@ -36,8 +37,7 @@ export const authController = {
       session_id: generateId(18)
     };
     const token = signToken(tokenPayload, { expiresIn: process.env.JWT_EXPIRES_IN || '1h' });
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
+    sendOk(res, {
       access_token: token,
       expires_in: process.env.JWT_EXPIRES_IN || '3600',
       user: {
@@ -46,7 +46,7 @@ export const authController = {
         role: user.role
       },
       tenant: { id: tenant.id, status: tenant.status }
-    }));
+    });
   },
 
   refresh: async ({ res, user }) => {
@@ -62,7 +62,6 @@ export const authController = {
       throw error;
     }
     const token = signToken({ ...user, session_id: generateId(18) }, { expiresIn: process.env.JWT_EXPIRES_IN || '1h' });
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ access_token: token, expires_in: process.env.JWT_EXPIRES_IN || '3600' }));
+    sendOk(res, { access_token: token, expires_in: process.env.JWT_EXPIRES_IN || '3600' });
   }
 };

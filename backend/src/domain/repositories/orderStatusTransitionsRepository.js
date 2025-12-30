@@ -2,40 +2,43 @@ import { getPool } from '../../infrastructure/db/mysqlPool.js';
 import { generateId } from '../utils/id.js';
 
 class OrderStatusTransitionsRepository {
-    async create({ tenant_id, from_status_id, to_status_id }) {
+    async create({ tenant_id, from_status_id, to_status_id }, { conn } = {}) {
         const id = generateId();
-        await getPool().execute(
+        const executor = conn || getPool();
+        await executor.execute(
             'INSERT INTO order_status_transitions (id, tenant_id, from_status_id, to_status_id) VALUES (?, ?, ?, ?)',
             [id, tenant_id, from_status_id, to_status_id]
         );
         return id;
     }
 
-    async list(tenant_id) {
-        const [rows] = await getPool().execute(
+    async list(tenant_id, { conn } = {}) {
+        const executor = conn || getPool();
+        const [rows] = await executor.execute(
             'SELECT * FROM order_status_transitions WHERE tenant_id = ?',
             [tenant_id]
         );
         return rows;
     }
 
-    async canTransition(tenant_id, from_status_id, to_status_id) {
-        const [rows] = await getPool().execute(
+    async canTransition(tenant_id, from_status_id, to_status_id, { conn } = {}) {
+        const executor = conn || getPool();
+        const [rows] = await executor.execute(
             'SELECT * FROM order_status_transitions WHERE tenant_id = ? AND from_status_id = ? AND to_status_id = ?',
             [tenant_id, from_status_id, to_status_id]
         );
         if (rows.length > 0) return true;
 
-        // Check if ANY transitions exist for this tenant. If NONE exist, allow EVERYTHING (per requirements).
-        const [all] = await getPool().execute(
+        const [all] = await executor.execute(
             'SELECT id FROM order_status_transitions WHERE tenant_id = ? LIMIT 1',
             [tenant_id]
         );
         return all.length === 0;
     }
 
-    async delete(tenant_id, from_status_id, to_status_id) {
-        await getPool().execute(
+    async delete(tenant_id, from_status_id, to_status_id, { conn } = {}) {
+        const executor = conn || getPool();
+        await executor.execute(
             'DELETE FROM order_status_transitions WHERE tenant_id = ? AND from_status_id = ? AND to_status_id = ?',
             [tenant_id, from_status_id, to_status_id]
         );
