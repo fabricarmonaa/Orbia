@@ -2,58 +2,72 @@ import { paymentsRepository } from '../../../domain/repositories/paymentsReposit
 import { paymentMethodsRepository } from '../../../domain/repositories/paymentMethodsRepository.js';
 import { auditEventsRepository } from '../../../domain/repositories/auditEventsRepository.js';
 import { ordersRepository } from '../../../domain/repositories/ordersRepository.js';
-import { getPool } from '../../../infrastructure/db/mysqlPool.js';
+import { paymentOrdersRepository } from '../../../domain/repositories/paymentOrdersRepository.js';
+import { paymentsReadRepository } from '../../../domain/repositories/paymentsReadRepository.js';
+import { usersRepository } from '../../../domain/repositories/usersRepository.js';
+import { usersReadRepository } from '../../../domain/repositories/usersReadRepository.js';
+import { withTransaction } from '../../../infrastructure/db/mysqlPool.js';
+import { Payment } from '../../../domain/entities/Payment.js';
 
 export class CreatePaymentHandler {
     async handle(command) {
         const { tenant_id, payload } = command;
+        if (!tenant_id) {
+            const error = new Error('tenant_id is required');
+            error.statusCode = 400;
+            throw error;
+        }
 
-        // payload: { user_id, method_code (or method_id), amount, order_id (optional to link) }
+        const { user_id, method_code, amount, order_id = null, note = '' } = payload || {};
+        const payment = Payment.create({ tenantId: tenant_id, userId: user_id, methodCode: method_code, amount, note });
 
-        // 1. Resolve Payment Method
-        let methodId = payload.method_id;
-        if (!methodId && payload.method_code) {
-            const method = await paymentMethodsRepository.findByCode(tenant_id, payload.method_code);
+        return withTransaction(async conn => {
+            const user = await usersRepository.findById(payment.userId, tenant_id, { conn });
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const method = await paymentMethodsRepository.findByCode(tenant_id, payment.methodCode, { conn });
             if (!method) {
-                throw Object.assign(new Error(`Invalid payment method code: ${payload.method_code}`), { statusCode: 400 });
+                const error = new Error('Payment method not found');
+                error.statusCode = 400;
+                throw error;
             }
-            methodId = method.id;
-        }
 
-        if (!methodId) {
-            throw Object.assign(new Error('Payment method is required'), { statusCode: 400 });
-        }
-
-        // 2. Create Payment
-        const payment = await paymentsRepository.create({
-            tenant_id,
-            user_id: payload.user_id,
-            method_id: methodId,
-            amount: payload.amount
-        });
-
-        // 3. Link to Order if provided
-        if (payload.order_id) {
-            // Check order existence - simple check
-            const order = await ordersRepository.findById(payload.order_id, tenant_id);
-            if (order) {
-                await getPool().execute(
-                    'INSERT INTO payment_orders (payment_id, order_id) VALUES (?, ?)',
-                    [payment.id, payload.order_id]
-                );
+            if (order_id) {
+                const order = await ordersRepository.findById(order_id, tenant_id, { conn });
+                if (!order) {
+                    const error = new Error('Order not found for tenant');
+                    error.statusCode = 404;
+                    throw error;
+                }
             }
-        }
 
-        // 4. Audit
-        await auditEventsRepository.append({
-            tenant_id,
-            aggregate_id: payment.id,
-            type: 'PAYMENT_CREATED',
-            payload: { ...payload, payment_id: payment.id }
+            const created = await paymentsRepository.create({
+                tenant_id,
+                user_id: payment.userId,
+                method_id: method.id,
+                amount: payment.amount,
+                note: payment.note
+            }, { conn });
+
+            if (order_id) {
+                await paymentOrdersRepository.link(created.id, [order_id], { conn });
+            }
+
+            await auditEventsRepository.append({
+                tenant_id,
+                aggregate_id: created.id,
+                type: 'PAYMENT_CREATED',
+                payload: { user_id: payment.userId, method_code: payment.methodCode, amount: payment.amount, order_id, note: payment.note }
+            }, { conn });
+
+            await paymentsReadRepository.refreshFromSources(tenant_id, created.id, { conn });
+            await usersReadRepository.refreshFromSources(tenant_id, payment.userId, { conn });
+
+            return { id: created.id };
         });
-
-        // TODO: Update Cash Session here if implementing that level of integration
-
-        return { id: payment.id };
     }
 }

@@ -8,10 +8,15 @@ export function createContextMiddleware(req, res, rawBody) {
   const token = auth?.startsWith('Bearer ')
     ? auth.slice('Bearer '.length)
     : undefined;
-  if (token) console.log('Token extracted:', token.substring(0, 10) + '...');
   const user = token ? verifyToken(token) : null;
-  if (token && !user) console.log('Token verification failed');
-  if (user) console.log('User verified:', user.tenant_id, user.role);
+  const authContext = user
+    ? {
+        tenantId: user.tenant_id,
+        userId: user.user_id,
+        role: user.role,
+        roles: [user.role]
+      }
+    : null;
 
   return {
     req,
@@ -22,6 +27,9 @@ export function createContextMiddleware(req, res, rawBody) {
     rawBody,
     body: null,
     user,
+    auth: authContext,
+    tenantId: authContext?.tenantId || null,
+    userId: authContext?.userId || null,
     params: {},
     locals: {},
     query: url.searchParams

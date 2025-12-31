@@ -17,14 +17,20 @@ import { CreateOrderCommand } from './application/commands/orders/CreateOrderCom
 import { CreateOrderHandler } from './application/commands/orders/CreateOrderHandler.js';
 import { GetOrdersQuery } from './application/queries/orders/GetOrdersQuery.js';
 import { GetOrdersHandler } from './application/queries/orders/GetOrdersHandler.js';
+import { UpdateOrderStatusCommand } from './application/commands/orders/UpdateOrderStatusCommand.js';
+import { UpdateOrderStatusHandler } from './application/commands/orders/UpdateOrderStatusHandler.js';
 
 import { RegisterPaymentCommand } from './application/commands/payments/RegisterPaymentCommand.js';
 import { RegisterPaymentHandler } from './application/commands/payments/RegisterPaymentHandler.js';
 import { CreatePaymentCommand } from './application/commands/payments/CreatePaymentCommand.js';
 import { CreatePaymentHandler } from './application/commands/payments/CreatePaymentHandler.js';
+import { GetPaymentsQuery } from './application/queries/payments/GetPaymentsQuery.js';
+import { GetPaymentsHandler } from './application/queries/payments/GetPaymentsHandler.js';
 
 import { CreateCashMovementCommand } from './application/commands/cash/CreateCashMovementCommand.js';
 import { CreateCashMovementHandler } from './application/commands/cash/CreateCashMovementHandler.js';
+import { GetCashboxQuery } from './application/queries/cash/GetCashboxQuery.js';
+import { GetCashboxHandler } from './application/queries/cash/GetCashboxHandler.js';
 
 import { GenerateTrackingLinkCommand } from './application/commands/tracking/GenerateTrackingLinkCommand.js';
 import { CreateTrackingLinkHandler } from './application/commands/tracking/CreateTrackingLinkHandler.js';
@@ -41,13 +47,17 @@ export function bootstrapCqrs() {
 
     // Orders
     commandBus.register(CreateOrderCommand.name, new CreateOrderHandler());
+    commandBus.register(UpdateOrderStatusCommand.name, new UpdateOrderStatusHandler());
     queryBus.register(GetOrdersQuery.name, new GetOrdersHandler());
 
     // Payments
     commandBus.register(RegisterPaymentCommand.name, new RegisterPaymentHandler());
+    commandBus.register(CreatePaymentCommand.name, new CreatePaymentHandler());
+    queryBus.register(GetPaymentsQuery.name, new GetPaymentsHandler());
 
     // Cash
     commandBus.register(CreateCashMovementCommand.name, new CreateCashMovementHandler());
+    queryBus.register(GetCashboxQuery.name, new GetCashboxHandler());
 
     // Tracking
     commandBus.register(GenerateTrackingLinkCommand.name, new CreateTrackingLinkHandler());

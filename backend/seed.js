@@ -8,8 +8,8 @@ const dbConfig = {
     port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'Orbia'
-};
+    database: process.env.DB_NAME || 'orbia'
+}; 
 
 async function seed() {
     console.log('🌱 Starting Seed...');
@@ -20,11 +20,13 @@ async function seed() {
         // Disable foreign keys to truncate safely
         await conn.query('SET FOREIGN_KEY_CHECKS = 0');
         const tables = [
-            'ai_command_logs', 'audit_events', 'cash_movements', 'cash_categories',
-            'invoice_field_values', 'invoice_orders', 'invoices', 'invoice_template_fields', 'invoice_templates',
-            'payment_orders', 'payments', 'payment_methods', 'order_items', 'orders', 'order_statuses',
-            'user_extra_values', 'extra_fields', 'user_profiles', 'users', 'tenant_ai_configs',
-            'tenant_status_history', 'tenants', 'branches', 'products', 'public_tracking_links'
+            'ai_command_logs', 'audit_events', 'cash_movements', 'cash_categories', 'cash_sessions',
+            'fixed_expenses', 'invoice_field_values', 'invoice_orders', 'invoices', 'invoice_template_fields',
+            'invoice_templates', 'payment_orders', 'payments', 'payment_methods', 'order_items', 'orders',
+            'order_status_history', 'order_status_transitions', 'orders_read', 'payments_read', 'cashbox_read',
+            'users_read', 'monthly_finance_read', 'user_extra_values', 'extra_fields', 'user_profiles',
+            'user_preferences', 'users', 'tenant_ai_configs', 'tenant_settings', 'tenant_status_history', 'tenants',
+            'branches', 'products', 'public_tracking_links'
         ];
 
         for (const t of tables) {

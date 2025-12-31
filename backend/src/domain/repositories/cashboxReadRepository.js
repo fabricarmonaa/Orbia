@@ -1,8 +1,8 @@
 import { getPool } from '../../infrastructure/db/mysqlPool.js';
 
 class CashboxReadRepository {
-  async refreshFromSources(tenant_id, movement_id, connection = null) {
-    const executor = connection || getPool();
+  async refreshFromSources(tenant_id, movement_id, { conn } = {}) {
+    const executor = conn || getPool();
     const [rows] = await executor.execute(
       `SELECT c.id, c.tenant_id, cat.name AS category, pm.name AS method, c.amount, c.occurred_at
        FROM cash_movements c
@@ -20,7 +20,7 @@ class CashboxReadRepository {
     );
   }
 
-  async list({ tenant_id, filters = {}, page = 1, limit = 20 }) {
+  async list({ tenant_id, filters = {}, page = 1, limit = 20 }, { conn } = {}) {
     const offset = (page - 1) * limit;
     const conditions = ['tenant_id = ?'];
     const params = [tenant_id];
@@ -41,7 +41,8 @@ class CashboxReadRepository {
       params.push(filters.to);
     }
     const where = `WHERE ${conditions.join(' AND ')}`;
-    const [rows] = await getPool().execute(
+    const executor = conn || getPool();
+    const [rows] = await executor.execute(
       `SELECT id, category, method, amount, occurred_at FROM cashbox_read
        ${where}
        ORDER BY occurred_at DESC

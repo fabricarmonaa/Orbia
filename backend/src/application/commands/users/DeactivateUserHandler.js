@@ -1,49 +1,32 @@
 import { usersRepository } from '../../../domain/repositories/usersRepository.js';
 import { usersReadRepository } from '../../../domain/repositories/usersReadRepository.js';
-import { auditRepository } from '../../../domain/repositories/auditRepository.js';
-import { getPool } from '../../../infrastructure/db/mysqlPool.js';
+import { auditEventsRepository } from '../../../domain/repositories/auditEventsRepository.js';
+import { withTransaction } from '../../../infrastructure/db/mysqlPool.js';
 
 export class DeactivateUserHandler {
     async handle(command) {
-        const pool = getPool();
-        const connection = await pool.getConnection();
+        const { tenant_id, user_id } = command;
 
-        try {
-            await connection.beginTransaction();
-
-            const { tenant_id, user_id } = command;
-
-            // Verify user exists and belongs to tenant
-            const user = await usersRepository.findById(user_id);
-            if (!user || user.tenant_id !== tenant_id) {
-                throw new Error('User not found or access denied');
+        return withTransaction(async connection => {
+            const user = await usersRepository.findById(user_id, tenant_id, { conn: connection });
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 404;
+                throw error;
             }
 
-            // Deactivate user
-            await usersRepository.updateActive(user_id, false);
+            await usersRepository.update({ id: user_id, tenant_id, active: 0, role: user.role }, { conn: connection });
 
-            // Audit event
-            await auditRepository.log({
+            await auditEventsRepository.append({
                 tenant_id,
-                entity_type: 'USER',
-                entity_id: user_id,
-                action: 'DEACTIVATE',
-                performed_by: user_id,
-                details: JSON.stringify({ deactivated: true })
-            });
+                aggregate_id: user_id,
+                type: 'USER_DEACTIVATED',
+                payload: { active: false }
+            }, { conn: connection });
 
-            // Refresh read model
-            await usersReadRepository.refreshOne(user_id);
-
-            await connection.commit();
+            await usersReadRepository.refreshFromSources(tenant_id, user_id, { conn: connection });
 
             return { success: true, user_id };
-
-        } catch (error) {
-            await connection.rollback();
-            throw error;
-        } finally {
-            connection.release();
-        }
+        });
     }
 }

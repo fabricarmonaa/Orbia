@@ -1,9 +1,8 @@
-import { Command } from '../../../infrastructure/cqrs/Base.js';
+import * as Base from '../../../infrastructure/cqrs/Base.js';
 
-export class CreatePaymentCommand extends Command {
+export class CreatePaymentCommand extends Base.Command {
     constructor({ tenant_id, payload }) {
-        super();
+        super(payload);
         this.tenant_id = tenant_id;
-        this.payload = payload;
     }
 }

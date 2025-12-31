@@ -1,0 +1,26 @@
+# Node
+node_modules
+npm-debug.log*
+yarn-error.log
+.pnpm-store
+
+# Env
+.env
+*.env
+backend/.env
+frontend/.env
+services/ai/.env
+
+# Build artifacts
+/dist
+/build
+/.cache
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Databases / misc
+*.sqlite
+.DS_Store

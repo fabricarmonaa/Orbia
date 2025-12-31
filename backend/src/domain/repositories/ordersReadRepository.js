@@ -1,8 +1,8 @@
 import { getPool } from '../../infrastructure/db/mysqlPool.js';
 
 class OrdersReadRepository {
-  async refreshFromSources(tenant_id, order_id, connection = null) {
-    const executor = connection || getPool();
+  async refreshFromSources(tenant_id, order_id, { conn } = {}) {
+    const executor = conn || getPool();
     const [rows] = await executor.execute(
       `SELECT o.id, o.user_id, os.name AS status, MAX(o.updated_at) AS last_update,
               COALESCE(SUM(oi.quantity * oi.price), 0) AS total
