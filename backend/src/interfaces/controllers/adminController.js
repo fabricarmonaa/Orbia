@@ -72,10 +72,7 @@ export const adminController = {
     const tenant_id = await requireTenantContext(context);
     const filters = {
       dni: context.query.get('dni') || undefined,
-      name: context.query.get('name') || undefined,
-      active: typeof context.query.get('active') !== 'undefined'
-        ? context.query.get('active') === 'true'
-        : undefined
+      name: context.query.get('name') || undefined
     };
     const page = Number(context.query.get('page') || '1');
     const limit = Number(context.query.get('limit') || '20');

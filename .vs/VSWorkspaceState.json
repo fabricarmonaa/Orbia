@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\backend",
+    "\\backend\\src",
+    "\\backend\\src\\domain",
+    "\\backend\\src\\domain\\repositories"
+  ],
+  "SelectedNode": "\\backend\\src\\domain\\repositories\\userProfilesRepository.js",
+  "PreviewInSolutionExplorer": false
+}
